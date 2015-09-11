@@ -1,18 +1,17 @@
 FROM ubuntu:14.04
 MAINTAINER Dan Bode <dan@bodeco.io>
 RUN apt-get update
+# install python deps
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y -q python-all python-pip
+# install pip build deps
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y -q gcc git python-dev python-lxml
+# install non-required keystone dependent packages
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y -q python-mysqldb
 WORKDIR /opt
 RUN git clone http://github.com/jiocloud/keystone.git
 WORKDIR /opt/keystone
 RUN pip install -r requirements.txt
 RUN python setup.py install
-## Start Keystone
-RUN echo "#!/bin/bash" > /root/postlaunchconfig.sh
-RUN echo "/usr/local/bin/keystone-manage db_sync" >> /root/postlaunchconfig.sh
-RUN echo "/usr/local/bin/keystone-all" >> /root/postlaunchconfig.sh
-RUN chmod 755 /root/postlaunchconfig.sh
 
 # weird stuff I had to do
 
@@ -33,6 +32,17 @@ RUN chmod 755 /root/postlaunchconfig.sh
 #ImportError: No module named utils
 RUN sudo cp -Rvf /usr/local/lib/python2.7/dist-packages/oslo_utils /usr/local/lib/python2.7/dist-packages/oslo/utils
 
-EXPOSE 35357
-EXPOSE 5000
-CMD /usr/local/bin/keystone-all --verbose --debug
+# tmp using these ports so that I can drop it in with as few modifications as possible
+# b/c it chooses to bind ports based on config settings. I will update that config
+# as part of a bigger patch
+EXPOSE 35358
+EXPOSE 15000
+
+## Start Keystone
+RUN echo "#!/bin/bash" > /root/postlaunchconfig.sh
+RUN echo "/usr/local/bin/keystone-manage --config-dir=/opt/keystone/conf db_sync" >> /root/postlaunchconfig.sh
+RUN echo "/usr/local/bin/keystone-all --config-dir=/opt/keystone/conf --verbose --debug" >> /root/postlaunchconfig.sh
+RUN chmod 755 /root/postlaunchconfig.sh
+
+RUN mkdir /var/log/keystone
+CMD /root/postlaunchconfig.sh
